@@ -2,17 +2,10 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 import torch
-from torch.nn import BCEWithLogitsLoss, BCELoss
-from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from keras.preprocessing.sequence import pad_sequences
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.metrics import classification_report, confusion_matrix, multilabel_confusion_matrix, f1_score, accuracy_score
-from transformers import AutoModel, AutoTokenizer 
+from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
+from sklearn.metrics import classification_report, f1_score, accuracy_score
 import pickle
 from transformers import *
-from tqdm import tqdm, trange
-from ast import literal_eval
 
 
 device_name = tf.test.gpu_device_name()
@@ -28,7 +21,6 @@ torch.cuda.get_device_name(0)
 
 max_length = 100
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True) # tokenizer
-encodings = tokenizer.batch_encode_plus(comments,max_length=max_length,pad_to_max_length=True) # tokenizer's
 batch_size = 8
 
 model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=3)
@@ -39,8 +31,7 @@ test_df = pd.read_csv('test_main.csv')
 print(test_df.shape)
 test_df.dropna()
 print(test_df.shape)
-# test_df.drop(columns='content', inplace=True)
-# test_df = test_df.rename(columns={'content': 'tweet', 'Against Trump': 'Anti Trump', 'Against Biden': 'Anti Biden'})
+
 test_label_cols = ['Pro Trump', 'Pro Biden', 'Neutral']
 test_df['Pro Trump'] = np.nan
 test_df['Pro Biden'] = np.nan
@@ -59,13 +50,14 @@ test_inputs = torch.tensor(test_input_ids)
 test_labels = torch.tensor(test_labels)
 test_masks = torch.tensor(test_attention_masks)
 test_token_types = torch.tensor(test_token_type_ids)
+
+
 # Create test dataloader
 test_data = TensorDataset(test_inputs, test_masks, test_labels, test_token_types)
 test_sampler = SequentialSampler(test_data)
 test_dataloader = DataLoader(test_data, sampler=test_sampler, batch_size=8)
 
 # Test
-# Put model in evaluation mode to evaluate loss on the validation set
 model.eval()
 
 #track variables
@@ -95,16 +87,14 @@ for i, batch in enumerate(test_dataloader):
 tokenized_texts = [item for sublist in tokenized_texts for item in sublist]
 pred_labels = [item for sublist in pred_labels for item in sublist]
 true_labels = [item for sublist in true_labels for item in sublist]
+
 # Converting flattened binary values to boolean values
 true_bools = [tl==1 for tl in true_labels]
-
 pred_bools = [pl>0.50 for pl in pred_labels] #boolean output after thresholding
 
 # Print and save classification report
-# print('F1 Validation Accuracy: ', val_f1_accuracy)
-# print('Flat Validation Accuracy: ', val_flat_accuracy,'\n')
-print('Test F1 Accuracy: ', f1_score(true_bools, pred_bools,average='micro'))
-print('Test Flat Accuracy: ', accuracy_score(true_bools, pred_bools),'\n')
+print('F1 Accuracy: ', f1_score(true_bools, pred_bools,average='micro'))
+print('Accuracy: ', accuracy_score(true_bools, pred_bools),'\n')
 clf_report = classification_report(true_bools,pred_bools,target_names=test_label_cols)
 pickle.dump(clf_report, open('classification_report.txt','wb')) #save report
 print(clf_report)
